@@ -22,10 +22,18 @@
         <button class="btn-blue" onclick="location.href='/subjects.html'">Subjects</button>
         <button class="btn-blue" onclick="location.href='/timetable.html'">Timetable</button>
         <button class="btn-yellow" onclick="location.href='/percentage.html'">Percentages</button>
-        <button class="btn-blue" onclick="location.href='/qr-view'">QR View</button>
+        <button class="btn-blue" onclick="openQRView()">QR View</button>
         <button class="btn-green" onclick="location.href='/export-attendance'">Export Attendance</button>
         <button class="btn-green" onclick="location.href='/export-percentages'">Export Percentages</button>
         <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card">
+        <h2>QR Session</h2>
+        <div class="form-grid">
+            <select id="qrSession"></select>
+            <button class="btn-blue" onclick="openQRView()">Open QR</button>
+        </div>
     </div>
 
     <div class="stat-grid">
@@ -45,7 +53,7 @@
         <h2>Filters</h2>
         <div class="form-grid">
             <input id="studentId" placeholder="Student ID">
-            <input id="session" placeholder="Session">
+            <input id="session" placeholder="Session e.g. PHY101">
             <input id="from" type="date">
             <input id="to" type="date">
             <button class="btn-blue" onclick="loadAttendance()">Apply Filter</button>
@@ -58,7 +66,17 @@
             <table>
                 <thead>
                     <tr>
-                        <th>#</th><th>ID</th><th>Name</th><th>Class</th><th>Session</th><th>Subject</th><th>Date</th><th>Distance</th><th>Face</th><th>Movement</th><th>Action</th>
+                        <th>#</th>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Class</th>
+                        <th>Session</th>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th>Distance</th>
+                        <th>Face</th>
+                        <th>Movement</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="attendanceBody"></tbody>
@@ -72,7 +90,12 @@
             <table>
                 <thead>
                     <tr>
-                        <th>#</th><th>Student</th><th>Session</th><th>Reason</th><th>Distance</th><th>Time</th>
+                        <th>#</th>
+                        <th>Student</th>
+                        <th>Session</th>
+                        <th>Reason</th>
+                        <th>Distance</th>
+                        <th>Time</th>
                     </tr>
                 </thead>
                 <tbody id="suspiciousBody"></tbody>
@@ -83,6 +106,40 @@
 
 <script>
 let presentChart;
+
+async function loadSubjectsForQR() {
+    try {
+        const res = await fetch("/subjects");
+        const data = await res.json();
+
+        const select = document.getElementById("qrSession");
+
+        if (!Array.isArray(data) || data.length === 0) {
+            select.innerHTML = `<option value="">No sessions found</option>`;
+            return;
+        }
+
+        select.innerHTML = data.map(s => `
+            <option value="${s.session}">
+                ${s.session} - ${s.subjectName}
+            </option>
+        `).join("");
+
+    } catch (err) {
+        console.error("SUBJECT LOAD ERROR:", err);
+    }
+}
+
+function openQRView() {
+    const session = document.getElementById("qrSession").value;
+
+    if (!session) {
+        alert("Please create/select a subject session first");
+        return;
+    }
+
+    window.location.href = `/qr-view?session=${encodeURIComponent(session)}`;
+}
 
 async function loadStats() {
     const res = await fetch("/dashboard-stats");
@@ -101,24 +158,24 @@ async function loadStats() {
     if (presentChart) presentChart.destroy();
 
     presentChart = new Chart(ctx, {
-    type: "doughnut",
-    data: {
-        labels: ["Present Today", "Absent Today"],
-        datasets: [{
-            data: [s.todayAttendance, absent]
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        cutout: "70%",
-        plugins: {
-            legend: {
-                position: "bottom"
+        type: "doughnut",
+        data: {
+            labels: ["Present Today", "Absent Today"],
+            datasets: [{
+                data: [s.todayAttendance, absent]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: "70%",
+            plugins: {
+                legend: {
+                    position: "bottom"
+                }
             }
         }
-    }
-});
+    });
 }
 
 async function loadAttendance() {
@@ -132,7 +189,14 @@ async function loadAttendance() {
     const res = await fetch(`/attendance?${params.toString()}`);
     const data = await res.json();
 
-    document.getElementById("attendanceBody").innerHTML = data.map((x, i) => `
+    const body = document.getElementById("attendanceBody");
+
+    if (!Array.isArray(data) || data.length === 0) {
+        body.innerHTML = `<tr><td colspan="11">📭 No attendance records found</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = data.map((x, i) => `
         <tr>
             <td>${i + 1}</td>
             <td>${x.studentId}</td>
@@ -144,7 +208,9 @@ async function loadAttendance() {
             <td>${x.distanceMeters ?? "-"}</td>
             <td>${x.faceVerified ? "✅" : "❌"}</td>
             <td>${x.blinkVerified ? "✅" : "❌"}</td>
-            <td><button class="btn-red" onclick="deleteRecord('${x._id}')">Delete</button></td>
+            <td>
+                <button class="btn-red" onclick="deleteRecord('${x._id}')">Delete</button>
+            </td>
         </tr>
     `).join("");
 }
@@ -153,7 +219,14 @@ async function loadSuspicious() {
     const res = await fetch("/suspicious-logs");
     const data = await res.json();
 
-    document.getElementById("suspiciousBody").innerHTML = data.map((x, i) => `
+    const body = document.getElementById("suspiciousBody");
+
+    if (!Array.isArray(data) || data.length === 0) {
+        body.innerHTML = `<tr><td colspan="6">📭 No suspicious activity</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = data.map((x, i) => `
         <tr>
             <td>${i + 1}</td>
             <td>${x.studentId || "-"}</td>
@@ -168,7 +241,10 @@ async function loadSuspicious() {
 async function deleteRecord(id) {
     if (!confirm("Delete record?")) return;
 
-    const res = await fetch(`/attendance/${id}`, { method: "DELETE" });
+    const res = await fetch(`/attendance/${id}`, {
+        method: "DELETE"
+    });
+
     const r = await res.json();
 
     alert(r.message);
@@ -176,6 +252,7 @@ async function deleteRecord(id) {
 }
 
 function loadAll() {
+    loadSubjectsForQR();
     loadStats();
     loadAttendance();
     loadSuspicious();
@@ -183,7 +260,7 @@ function loadAll() {
 
 loadAll();
 </script>
-<script src="/theme.js"></script>
+
 <script src="/ui.js"></script>
 </body>
 </html>
