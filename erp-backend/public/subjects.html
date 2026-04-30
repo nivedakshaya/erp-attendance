@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Subject Master</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>📚 Subject / Session Master</h1>
+        <p>Create subject sessions and assign teachers</p>
+    </div>
+
+    <div class="nav">
+        <button class="btn-blue" onclick="location.href='/admin.html'">Admin</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card">
+        <h2>Add Subject</h2>
+        <div class="form-grid">
+            <input id="session" placeholder="Session e.g. CLASS101">
+            <input id="subjectName" placeholder="Subject Name">
+            <input id="teacherUsername" placeholder="Teacher Username">
+            <button class="btn-green" onclick="addSubject()">Add Subject</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Subjects</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Session</th><th>Subject</th><th>Teacher</th><th>Action</th></tr>
+                </thead>
+                <tbody id="body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadSubjects() {
+    const res = await fetch("/subjects");
+    const data = await res.json();
+
+    document.getElementById("body").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.session}</td>
+            <td>${x.subjectName}</td>
+            <td>${x.teacherUsername || "-"}</td>
+            <td><button class="btn-red" onclick="deleteSubject('${x._id}')">Delete</button></td>
+        </tr>
+    `).join("");
+}
+
+async function addSubject() {
+    const session = document.getElementById("session").value.trim();
+    const subjectName = document.getElementById("subjectName").value.trim();
+    const teacherUsername = document.getElementById("teacherUsername").value.trim();
+
+    const res = await fetch("/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session, subjectName, teacherUsername })
+    });
+
+    const result = await res.json();
+    alert(result.message || "Done");
+
+    if (result.success) {
+        ["session", "subjectName", "teacherUsername"].forEach(id => document.getElementById(id).value = "");
+        loadSubjects();
+    }
+}
+
+async function deleteSubject(id) {
+    if (!confirm("Delete subject?")) return;
+    const res = await fetch(`/subjects/${id}`, { method: "DELETE" });
+    const result = await res.json();
+    alert(result.message);
+    loadSubjects();
+}
+
+loadSubjects();
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Timetable Master</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>📅 Timetable Master</h1>
+        <p>Control when attendance is allowed</p>
+    </div>
+
+    <div class="nav">
+        <button class="btn-blue" onclick="location.href='/admin.html'">Admin</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card">
+        <h2>Add Timetable Slot</h2>
+        <div class="form-grid">
+            <input id="session" placeholder="Session e.g. CLASS101">
+            <select id="dayOfWeek">
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+                <option value="0">Sunday</option>
+            </select>
+            <input id="startTime" type="time">
+            <input id="endTime" type="time">
+            <button class="btn-green" onclick="addTimetable()">Add Slot</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Timetable</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Session</th><th>Day</th><th>Start</th><th>End</th><th>Action</th></tr>
+                </thead>
+                <tbody id="body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+async function loadTimetable() {
+    const res = await fetch("/timetables");
+    const data = await res.json();
+
+    document.getElementById("body").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.session}</td>
+            <td>${days[x.dayOfWeek]}</td>
+            <td>${x.startTime}</td>
+            <td>${x.endTime}</td>
+            <td><button class="btn-red" onclick="deleteSlot('${x._id}')">Delete</button></td>
+        </tr>
+    `).join("");
+}
+
+async function addTimetable() {
+    const session = document.getElementById("session").value.trim();
+    const dayOfWeek = Number(document.getElementById("dayOfWeek").value);
+    const startTime = document.getElementById("startTime").value;
+    const endTime = document.getElementById("endTime").value;
+
+    const res = await fetch("/timetables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session, dayOfWeek, startTime, endTime })
+    });
+
+    const result = await res.json();
+    alert(result.message || "Done");
+    loadTimetable();
+}
+
+async function deleteSlot(id) {
+    if (!confirm("Delete timetable slot?")) return;
+    const res = await fetch(`/timetables/${id}`, { method: "DELETE" });
+    const result = await res.json();
+    alert(result.message);
+    loadTimetable();
+}
+
+loadTimetable();
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

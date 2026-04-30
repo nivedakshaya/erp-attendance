@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ERP Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="login-shell">
+    <div class="card login-card">
+        <div class="header">
+            <h1>🔐 ERP Login</h1>
+            <p>Secure attendance management system</p>
+        </div>
+
+        <div class="form-grid">
+            <input id="username" placeholder="Username">
+            <input id="password" type="password" placeholder="Password">
+            <button class="btn-green" onclick="login()">Login</button>
+        </div>
+
+        <p id="msg"></p>
+    </div>
+</div>
+
+<script>
+async function login() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const msg = document.getElementById("msg");
+
+    msg.innerText = "";
+
+    if (!username || !password) {
+        msg.style.color = "red";
+        msg.innerText = "Enter username and password";
+        return;
+    }
+
+    try {
+        const res = await fetch("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+            window.location.href = result.redirect;
+        } else {
+            msg.style.color = "red";
+            msg.innerText = result.message || "Login failed";
+        }
+    } catch (err) {
+        msg.style.color = "red";
+        msg.innerText = "Server error";
+    }
+}
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

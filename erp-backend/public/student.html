@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Student Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>🎓 My Attendance</h1>
+        <p>View your attendance percentage and history</p>
+    </div>
+
+    <div class="nav">
+        <input id="session" value="CLASS101">
+        <button class="btn-green" onclick="loadMine()">Load</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card" id="summary">Loading...</div>
+
+    <div class="card chartbox">
+        <canvas id="studentChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>Attendance History</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Session</th><th>Date</th><th>Time</th><th>Face</th><th>Movement</th></tr>
+                </thead>
+                <tbody id="body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let chart;
+
+function cls(p) {
+    if (p >= 75) return "good";
+    if (p >= 50) return "warn";
+    return "bad";
+}
+
+async function loadMine() {
+    const session = document.getElementById("session").value.trim() || "CLASS101";
+
+    const res = await fetch(`/my-attendance?session=${encodeURIComponent(session)}`);
+    const data = await res.json();
+
+    if (!data.success) {
+        document.getElementById("summary").innerText = "Failed to load";
+        return;
+    }
+
+    const p = data.percentage;
+    const absent = Math.max(p.totalClasses - p.attendedClasses, 0);
+
+    document.getElementById("summary").innerHTML = `
+        <div class="header">
+            <h2>${p.studentName} (${p.studentId})</h2>
+            <p>${p.session}</p>
+            <h1 class="${cls(p.percentage)}">${p.percentage}%</h1>
+            <h3 class="${cls(p.percentage)}">${p.status}</h3>
+            <p>Attended: ${p.attendedClasses} / ${p.totalClasses}</p>
+        </div>
+    `;
+
+    const ctx = document.getElementById("studentChart");
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+            labels: ["Present", "Absent"],
+            datasets: [{ data: [p.attendedClasses, absent] }]
+        }
+    });
+
+    const body = document.getElementById("body");
+
+    if (!data.history.length) {
+        body.innerHTML = `<tr><td colspan="6">No attendance history</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = data.history.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.session}</td>
+            <td>${x.date}</td>
+            <td>${new Date(x.time).toLocaleString()}</td>
+            <td>${x.faceVerified ? "✅" : "❌"}</td>
+            <td>${x.blinkVerified ? "✅" : "❌"}</td>
+        </tr>
+    `).join("");
+}
+
+loadMine();
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

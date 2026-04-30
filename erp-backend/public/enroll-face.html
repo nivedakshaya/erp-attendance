@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Enroll Face</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>🙂 Enroll Student Face</h1>
+        <p>Register biometric face descriptor for a student</p>
+    </div>
+
+    <div class="nav">
+        <button class="btn-blue" onclick="location.href='/students.html'">Back to Students</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card">
+        <div class="form-grid">
+            <input id="studentId" placeholder="Student ID e.g. S101">
+        </div>
+
+        <video id="video" autoplay muted playsinline></video>
+
+        <div class="nav">
+            <button class="btn-blue" onclick="startCamera()">Start Camera</button>
+            <button class="btn-green" onclick="enrollFace()">Enroll Face</button>
+        </div>
+
+        <p id="msg">Start camera and keep face clearly visible.</p>
+    </div>
+</div>
+
+<script>
+const video = document.getElementById("video");
+const msg = document.getElementById("msg");
+let modelsLoaded = false;
+
+const params = new URLSearchParams(window.location.search);
+const sid = params.get("studentId");
+if (sid) document.getElementById("studentId").value = sid;
+
+function show(text, color = "white") {
+    msg.innerText = text;
+    msg.style.color = color;
+}
+
+async function loadModels() {
+    if (modelsLoaded) return;
+
+    show("Loading face models...", "lightblue");
+
+    await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+    await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
+    await faceapi.nets.faceRecognitionNet.loadFromUri("/models");
+
+    modelsLoaded = true;
+    show("Models loaded", "lightgreen");
+}
+
+async function startCamera() {
+    try {
+        await loadModels();
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+        });
+
+        video.srcObject = stream;
+        show("Camera started. Keep face clearly visible.", "lightgreen");
+    } catch (err) {
+        console.error(err);
+        show("Camera/model error. Use HTTPS/ngrok and check models.", "red");
+    }
+}
+
+async function enrollFace() {
+    try {
+        const studentId = document.getElementById("studentId").value.trim();
+
+        if (!studentId) {
+            show("Enter Student ID", "red");
+            return;
+        }
+
+        if (!modelsLoaded) {
+            show("Start camera first", "red");
+            return;
+        }
+
+        show("Detecting face...", "lightblue");
+
+        const detection = await faceapi
+            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+        if (!detection) {
+            show("No face detected. Try better lighting.", "red");
+            return;
+        }
+
+        const descriptor = Array.from(detection.descriptor);
+
+        const res = await fetch(`/students/${studentId}/face`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ descriptor })
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+            show(result.message, "lightgreen");
+        } else {
+            show(result.message, "red");
+        }
+    } catch (err) {
+        console.error(err);
+        show("Enrollment failed.", "red");
+    }
+}
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

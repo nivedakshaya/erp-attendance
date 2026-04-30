@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Student & User Master</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>👨‍🎓 Student & User Master</h1>
+        <p>Manage student records, faces and login credentials</p>
+    </div>
+
+    <div class="nav">
+        <button class="btn-blue" onclick="location.href='/admin.html'">Admin</button>
+        <button class="btn-blue" onclick="location.href='/subjects.html'">Subjects</button>
+        <button class="btn-blue" onclick="location.href='/enroll-face.html'">Enroll Face</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card">
+        <h2>Add Student</h2>
+        <div class="form-grid">
+            <input id="studentId" placeholder="Student ID">
+            <input id="name" placeholder="Name">
+            <input id="className" placeholder="Class">
+            <input id="department" placeholder="Department">
+            <button class="btn-green" onclick="addStudent()">Add Student</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Students</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>#</th><th>ID</th><th>Name</th><th>Class</th><th>Department</th><th>Face</th><th>Action</th></tr>
+                </thead>
+                <tbody id="studentBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Add Login Credential</h2>
+        <div class="form-grid">
+            <input id="username" placeholder="Username">
+            <input id="password" placeholder="Password">
+            <select id="role">
+                <option value="teacher">Teacher</option>
+                <option value="student">Student</option>
+                <option value="admin">Admin</option>
+            </select>
+            <input id="loginStudentId" placeholder="Student ID for student login">
+            <input id="assignedSessions" placeholder="Teacher sessions e.g. CLASS101,CS102">
+            <button class="btn-green" onclick="addUser()">Add Login</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Login Credentials</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Username</th><th>Role</th><th>Student ID</th><th>Assigned Sessions</th><th>Action</th></tr>
+                </thead>
+                <tbody id="userBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadStudents() {
+    const res = await fetch("/students");
+    const data = await res.json();
+
+    document.getElementById("studentBody").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.studentId || "-"}</td>
+            <td>${x.name || "-"}</td>
+            <td>${x.className || "-"}</td>
+            <td>${x.department || "-"}</td>
+            <td>${x.faceDescriptor && x.faceDescriptor.length === 128 ? "<span class='good'>Enrolled</span>" : "<span class='warn'>Not Enrolled</span>"}</td>
+            <td>
+                <button class="btn-blue" onclick="enrollFace('${x.studentId}')">Enroll Face</button>
+                <button class="btn-red" onclick="deleteStudent('${x._id}')">Delete</button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+async function loadUsers() {
+    const res = await fetch("/users");
+    const data = await res.json();
+
+    document.getElementById("userBody").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.username || "-"}</td>
+            <td>${x.role || "-"}</td>
+            <td>${x.studentId || "-"}</td>
+            <td>${(x.assignedSessions || []).join(", ") || "-"}</td>
+            <td>
+                <button class="btn-yellow" onclick="resetPassword('${x._id}')">Reset Password</button>
+                <button class="btn-red" onclick="deleteUser('${x._id}')">Delete</button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+async function addStudent() {
+    const studentId = document.getElementById("studentId").value.trim();
+    const name = document.getElementById("name").value.trim();
+    const className = document.getElementById("className").value.trim();
+    const department = document.getElementById("department").value.trim();
+
+    const res = await fetch("/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId, name, className, department })
+    });
+
+    const result = await res.json();
+    alert(result.message || "Done");
+
+    if (result.success) {
+        ["studentId", "name", "className", "department"].forEach(id => document.getElementById(id).value = "");
+        loadStudents();
+    }
+}
+
+async function addUser() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const role = document.getElementById("role").value;
+    const studentId = document.getElementById("loginStudentId").value.trim();
+    const assignedSessions = document.getElementById("assignedSessions").value.split(",").map(x => x.trim()).filter(Boolean);
+
+    const res = await fetch("/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, role, studentId, assignedSessions })
+    });
+
+    const result = await res.json();
+    alert(result.message || "Done");
+
+    if (result.success) {
+        ["username", "password", "loginStudentId", "assignedSessions"].forEach(id => document.getElementById(id).value = "");
+        loadUsers();
+    }
+}
+
+function enrollFace(studentId) {
+    location.href = `/enroll-face.html?studentId=${encodeURIComponent(studentId)}`;
+}
+
+async function resetPassword(id) {
+    const password = prompt("Enter new password:");
+    if (!password) return;
+
+    const res = await fetch(`/users/${id}/reset-password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+    });
+
+    const result = await res.json();
+    alert(result.message || "Done");
+}
+
+async function deleteStudent(id) {
+    if (!confirm("Delete student?")) return;
+    const res = await fetch(`/students/${id}`, { method: "DELETE" });
+    const result = await res.json();
+    alert(result.message || "Done");
+    loadStudents();
+}
+
+async function deleteUser(id) {
+    if (!confirm("Delete login credential?")) return;
+    const res = await fetch(`/users/${id}`, { method: "DELETE" });
+    const result = await res.json();
+    alert(result.message || "Done");
+    loadUsers();
+}
+
+loadStudents();
+loadUsers();
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

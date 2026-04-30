@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Admin Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>📊 Admin Dashboard</h1>
+        <p>Attendance overview, reports and suspicious activity</p>
+    </div>
+
+    <div class="nav">
+        <button class="btn-green" onclick="loadAll()">Refresh</button>
+        <button class="btn-blue" onclick="location.href='/students.html'">Students & Users</button>
+        <button class="btn-blue" onclick="location.href='/subjects.html'">Subjects</button>
+        <button class="btn-blue" onclick="location.href='/timetable.html'">Timetable</button>
+        <button class="btn-yellow" onclick="location.href='/percentage.html'">Percentages</button>
+        <button class="btn-blue" onclick="location.href='/qr-view'">QR View</button>
+        <button class="btn-green" onclick="location.href='/export-attendance'">Export Attendance</button>
+        <button class="btn-green" onclick="location.href='/export-percentages'">Export Percentages</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="stat-grid">
+        <div class="stat-card"><h3>Total Students</h3><h2 id="totalStudents">0</h2></div>
+        <div class="stat-card"><h3>Today Attendance</h3><h2 id="todayAttendance">0</h2></div>
+        <div class="stat-card"><h3>Total Classes</h3><h2 id="totalSessions">0</h2></div>
+        <div class="stat-card"><h3>Low Attendance</h3><h2 id="lowAttendance">0</h2></div>
+        <div class="stat-card"><h3>Suspicious Logs</h3><h2 id="suspiciousCount">0</h2></div>
+    </div>
+
+    <div class="card chartbox">
+        <h2>Present vs Absent Today</h2>
+        <canvas id="presentChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>Filters</h2>
+        <div class="form-grid">
+            <input id="studentId" placeholder="Student ID">
+            <input id="session" placeholder="Session">
+            <input id="from" type="date">
+            <input id="to" type="date">
+            <button class="btn-blue" onclick="loadAttendance()">Apply Filter</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Attendance Records</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th><th>ID</th><th>Name</th><th>Class</th><th>Session</th><th>Subject</th><th>Date</th><th>Distance</th><th>Face</th><th>Movement</th><th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Suspicious Activity</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th><th>Student</th><th>Session</th><th>Reason</th><th>Distance</th><th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="suspiciousBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let presentChart;
+
+async function loadStats() {
+    const res = await fetch("/dashboard-stats");
+    const s = await res.json();
+
+    document.getElementById("totalStudents").innerText = s.totalStudents;
+    document.getElementById("todayAttendance").innerText = s.todayAttendance;
+    document.getElementById("totalSessions").innerText = s.totalSessions;
+    document.getElementById("lowAttendance").innerText = s.lowAttendance;
+    document.getElementById("suspiciousCount").innerText = s.suspiciousCount;
+
+    const absent = Math.max(s.totalStudents - s.todayAttendance, 0);
+
+    const ctx = document.getElementById("presentChart");
+
+    if (presentChart) presentChart.destroy();
+
+    presentChart = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+        labels: ["Present Today", "Absent Today"],
+        datasets: [{
+            data: [s.todayAttendance, absent]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: "70%",
+        plugins: {
+            legend: {
+                position: "bottom"
+            }
+        }
+    }
+});
+}
+
+async function loadAttendance() {
+    const params = new URLSearchParams();
+
+    ["studentId", "session", "from", "to"].forEach(id => {
+        const v = document.getElementById(id).value.trim();
+        if (v) params.append(id, v);
+    });
+
+    const res = await fetch(`/attendance?${params.toString()}`);
+    const data = await res.json();
+
+    document.getElementById("attendanceBody").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.studentId}</td>
+            <td>${x.studentName}</td>
+            <td>${x.className}</td>
+            <td>${x.session}</td>
+            <td>${x.subjectName || "-"}</td>
+            <td>${x.date}</td>
+            <td>${x.distanceMeters ?? "-"}</td>
+            <td>${x.faceVerified ? "✅" : "❌"}</td>
+            <td>${x.blinkVerified ? "✅" : "❌"}</td>
+            <td><button class="btn-red" onclick="deleteRecord('${x._id}')">Delete</button></td>
+        </tr>
+    `).join("");
+}
+
+async function loadSuspicious() {
+    const res = await fetch("/suspicious-logs");
+    const data = await res.json();
+
+    document.getElementById("suspiciousBody").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.studentId || "-"}</td>
+            <td>${x.session || "-"}</td>
+            <td>${x.reason}</td>
+            <td>${x.distanceMeters || "-"}</td>
+            <td>${new Date(x.createdAt).toLocaleString()}</td>
+        </tr>
+    `).join("");
+}
+
+async function deleteRecord(id) {
+    if (!confirm("Delete record?")) return;
+
+    const res = await fetch(`/attendance/${id}`, { method: "DELETE" });
+    const r = await res.json();
+
+    alert(r.message);
+    loadAll();
+}
+
+function loadAll() {
+    loadStats();
+    loadAttendance();
+    loadSuspicious();
+}
+
+loadAll();
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Attendance Percentages</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>📈 Attendance Percentages</h1>
+        <p>Subject-wise attendance performance</p>
+    </div>
+
+    <div class="nav">
+        <button class="btn-blue" onclick="location.href='/admin.html'">Admin</button>
+        <input id="session" value="CLASS101">
+        <button class="btn-green" onclick="loadPercentages()">Load</button>
+        <button class="btn-yellow" onclick="exportCSV()">Export Excel</button>
+        <button class="btn-gray" onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th><th>ID</th><th>Name</th><th>Class</th><th>Session</th><th>Attended</th><th>Total</th><th>%</th><th>Status</th><th>History</th>
+                    </tr>
+                </thead>
+                <tbody id="body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function cls(p) {
+    if (p >= 75) return "good";
+    if (p >= 50) return "warn";
+    return "bad";
+}
+
+async function loadPercentages() {
+    const session = document.getElementById("session").value.trim() || "CLASS101";
+
+    const res = await fetch(`/attendance-percentages?session=${encodeURIComponent(session)}`);
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+        alert(data.message || "Failed to load");
+        return;
+    }
+
+    document.getElementById("body").innerHTML = data.map((x, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${x.studentId}</td>
+            <td>${x.studentName}</td>
+            <td>${x.className}</td>
+            <td>${x.session}</td>
+            <td>${x.attendedClasses}</td>
+            <td>${x.totalClasses}</td>
+            <td class="${cls(x.percentage)}">${x.percentage}%</td>
+            <td class="${cls(x.percentage)}">${x.status}</td>
+            <td><button class="btn-blue" onclick="showHistory('${x.studentId}')">View</button></td>
+        </tr>
+    `).join("");
+}
+
+async function showHistory(studentId) {
+    const session = document.getElementById("session").value.trim();
+
+    const res = await fetch(`/student-history/${studentId}?session=${encodeURIComponent(session)}`);
+    const data = await res.json();
+
+    if (!data.length) {
+        alert("No history found");
+        return;
+    }
+
+    alert(data.map(x => `${x.date} - ${x.session} - ${new Date(x.time).toLocaleString()}`).join("\n"));
+}
+
+function exportCSV() {
+    const session = document.getElementById("session").value.trim() || "CLASS101";
+    location.href = `/export-percentages?session=${encodeURIComponent(session)}`;
+}
+
+loadPercentages();
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>

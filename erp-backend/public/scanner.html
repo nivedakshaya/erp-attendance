@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Smart Attendance Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="page">
+    <div class="header">
+        <h1>📍🙂 Smart Attendance</h1>
+        <p>GPS + head movement + face verification + QR scan</p>
+    </div>
+
+    <div class="card">
+        <div class="form-grid">
+            <input id="studentId" placeholder="Enter Student ID">
+        </div>
+
+        <div class="nav">
+            <button class="btn-blue" onclick="getLocation()">1. Allow Location</button>
+            <button class="btn-blue" onclick="startFaceCamera()" id="faceBtn" disabled>2. Start Face Camera</button>
+            <button class="btn-yellow" onclick="verifyMovementAndFace()" id="verifyBtn" disabled>3. Move Head + Verify</button>
+            <button class="btn-green" onclick="startScanner()" id="scanBtn" disabled>4. Start QR Scanner</button>
+        </div>
+
+        <video id="faceVideo" autoplay muted playsinline></video>
+        <div id="reader"></div>
+        <div id="result">Enter ID and begin verification.</div>
+    </div>
+</div>
+
+<script>
+const BACKEND_URL = window.location.origin;
+
+let html5QrCode;
+let scannerStarted = false;
+let currentLatitude = null;
+let currentLongitude = null;
+let modelsLoaded = false;
+let faceCameraStarted = false;
+let faceVerified = false;
+let movementVerified = false;
+let finalFaceDistance = null;
+
+const faceVideo = document.getElementById("faceVideo");
+
+function showResult(msg, success = false) {
+    const el = document.getElementById("result");
+    el.innerHTML = msg;
+    el.style.color = success ? "lightgreen" : "red";
+}
+
+function getLocation() {
+    const studentId = document.getElementById("studentId").value.trim();
+
+    if (!studentId) return showResult("❌ Enter Student ID first");
+
+    if (!navigator.geolocation) return showResult("❌ GPS not supported");
+
+    showResult("📍 Getting your location...", true);
+
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            currentLatitude = position.coords.latitude;
+            currentLongitude = position.coords.longitude;
+            document.getElementById("faceBtn").disabled = false;
+
+            showResult(
+                `✅ Location received<br>
+                Latitude: ${currentLatitude.toFixed(6)}<br>
+                Longitude: ${currentLongitude.toFixed(6)}<br>
+                Now start face camera.`,
+                true
+            );
+        },
+        error => {
+            let msg = "Location permission failed";
+            if (error.code === 1) msg = "Location permission denied";
+            if (error.code === 2) msg = "Location unavailable";
+            if (error.code === 3) msg = "Location request timed out";
+            showResult("❌ " + msg);
+        },
+        {
+            enableHighAccuracy: false,
+            timeout: 30000,
+            maximumAge: 60000
+        }
+    );
+}
+
+async function loadModels() {
+    if (modelsLoaded) return;
+
+    showResult("Loading face models...", true);
+
+    await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+    await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
+    await faceapi.nets.faceRecognitionNet.loadFromUri("/models");
+
+    modelsLoaded = true;
+    showResult("✅ Face models loaded", true);
+}
+
+async function startFaceCamera() {
+    try {
+        if (currentLatitude === null || currentLongitude === null) {
+            return showResult("❌ Allow location first");
+        }
+
+        await loadModels();
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user" },
+            audio: false
+        });
+
+        faceVideo.srcObject = stream;
+        faceCameraStarted = true;
+        document.getElementById("verifyBtn").disabled = false;
+
+        showResult("✅ Face camera started. Move head verification ready.", true);
+    } catch (err) {
+        console.error(err);
+        showResult("❌ Face camera/model error. Use HTTPS/ngrok and check models.");
+    }
+}
+
+function stopFaceCamera() {
+    if (faceVideo.srcObject) {
+        faceVideo.srcObject.getTracks().forEach(track => track.stop());
+        faceVideo.srcObject = null;
+    }
+    faceCameraStarted = false;
+}
+
+function euclideanDistance(a, b) {
+    let sum = 0;
+    for (let i = 0; i < a.length; i++) {
+        const diff = a[i] - b[i];
+        sum += diff * diff;
+    }
+    return Math.sqrt(sum);
+}
+
+async function detectHeadMovement(seconds = 4) {
+    showResult("➡️ Turn your head LEFT or RIGHT now...", true);
+
+    let initialNoseX = null;
+
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < seconds * 1000) {
+        const detection = await faceapi
+            .detectSingleFace(faceVideo, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks();
+
+        if (detection) {
+            const noseCenter = detection.landmarks.getNose()[3];
+
+            if (initialNoseX === null) {
+                initialNoseX = noseCenter.x;
+            } else {
+                if (Math.abs(noseCenter.x - initialNoseX) > 18) {
+                    return true;
+                }
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    return false;
+}
+
+async function verifyMovementAndFace() {
+    try {
+        const studentId = document.getElementById("studentId").value.trim();
+
+        if (!studentId) return showResult("❌ Enter Student ID first");
+        if (!faceCameraStarted) return showResult("❌ Start face camera first");
+
+        const moved = await detectHeadMovement(4);
+
+        if (!moved) {
+            movementVerified = false;
+            faceVerified = false;
+            document.getElementById("scanBtn").disabled = true;
+            return showResult("❌ No head movement detected. Try again.");
+        }
+
+        movementVerified = true;
+        showResult("✅ Movement detected. Verifying face...", true);
+
+        const faceRes = await fetch(`/students/${studentId}/face`);
+        const faceData = await faceRes.json();
+
+        if (!faceData.success) return showResult(`❌ ${faceData.message || "Face not enrolled"}`);
+
+        const detection = await faceapi
+            .detectSingleFace(faceVideo, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+        if (!detection) return showResult("❌ No face detected after movement.");
+
+        const currentDescriptor = Array.from(detection.descriptor);
+        const distance = euclideanDistance(currentDescriptor, faceData.descriptor);
+        finalFaceDistance = distance;
+
+        if (distance < 0.55) {
+            faceVerified = true;
+            document.getElementById("scanBtn").disabled = false;
+
+            showResult(
+                `✅ Movement + face verified for ${faceData.name}<br>
+                Face distance: ${distance.toFixed(3)}<br>
+                Now start QR scanner.`,
+                true
+            );
+        } else {
+            faceVerified = false;
+            document.getElementById("scanBtn").disabled = true;
+            showResult(`❌ Face does not match<br>Distance: ${distance.toFixed(3)}`);
+        }
+    } catch (err) {
+        console.error(err);
+        showResult("❌ Verification failed.");
+    }
+}
+
+async function markAttendance(qrData) {
+    try {
+        const studentId = document.getElementById("studentId").value.trim();
+
+        if (!studentId) return showResult("❌ Enter Student ID first");
+        if (currentLatitude === null || currentLongitude === null) return showResult("❌ Allow location before scanning");
+        if (!faceVerified || !movementVerified) return showResult("❌ Movement + face verification required");
+
+        const parsed = JSON.parse(qrData);
+
+        const res = await fetch(`${BACKEND_URL}/mark-attendance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                data: parsed.data,
+                hash: parsed.hash,
+                studentId,
+                latitude: currentLatitude,
+                longitude: currentLongitude,
+                faceVerified: true,
+                blinkVerified: true,
+                faceDistance: finalFaceDistance
+            })
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+            showResult(`
+                ✅ ${result.message}<br>
+                👤 ${result.studentName} (${result.student})<br>
+                📘 ${result.subjectName || result.session}<br>
+                📅 ${result.date}<br>
+                📍 Distance: ${result.distanceMeters}m
+            `, true);
+
+            if (html5QrCode && scannerStarted) {
+                await html5QrCode.stop();
+                scannerStarted = false;
+            }
+        } else {
+            showResult(`❌ ${result.message}`);
+        }
+    } catch (err) {
+        console.error(err);
+        showResult("❌ Invalid QR / Network error");
+    }
+}
+
+async function startScanner() {
+    const studentId = document.getElementById("studentId").value.trim();
+
+    if (!studentId) return showResult("❌ Enter Student ID first");
+    if (currentLatitude === null || currentLongitude === null) return showResult("❌ Allow location first");
+    if (!faceVerified || !movementVerified) return showResult("❌ Verify movement + face first");
+    if (scannerStarted) return showResult("Scanner already running", true);
+
+    stopFaceCamera();
+
+    html5QrCode = new Html5Qrcode("reader");
+
+    html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        decodedText => markAttendance(decodedText),
+        () => {}
+    ).then(() => {
+        scannerStarted = true;
+        showResult("✅ QR scanner started", true);
+    }).catch(err => {
+        console.error(err);
+        showResult("❌ QR camera access failed. Refresh and try again.");
+    });
+}
+</script>
+<script src="/theme.js"></script>
+<script src="/ui.js"></script>
+</body>
+</html>
