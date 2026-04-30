@@ -794,20 +794,21 @@ app.post("/mark-attendance", async (req, res) => {
             return res.status(400).json({ success: false, message: "QR expired" });
         }
 
-        const timetableCheck = await isSessionAllowedNow(parsed.session);
+        //const timetableCheck = await isSessionAllowedNow(parsed.session);
 
-        if (!timetableCheck.allowed) {
-            await logSuspicious(req, {
-                studentId,
-                session: parsed.session,
-                reason: "Outside timetable"
-            });
+        //if (!timetableCheck.allowed) {
+          //  await logSuspicious(req, {
+            //    studentId,
+              //  session: parsed.session,
+                //reason: "Outside timetable"
+           // });
 
-            return res.status(403).json({
-                success: false,
-                message: timetableCheck.message
-            });
-        }
+           // return res.status(403).json({
+            //    success: false,
+              //  message: timetableCheck.message
+            //});
+       // }
+        
 
         const subject = await Subject.findOne({ session: parsed.session });
 
