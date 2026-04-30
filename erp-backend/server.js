@@ -15,8 +15,8 @@ const SECRET = "mysecretkey";
 // =====================
 // GPS CONFIG - CHANGE THIS
 // =====================
-const ALLOWED_LAT = 12.971599;       // your classroom latitude
-const ALLOWED_LNG = 77.594563;       // your classroom longitude
+const ALLOWED_LAT = 13.0847246;       // your classroom latitude
+const ALLOWED_LNG = 77.4831032;       // your classroom longitude
 const ALLOWED_RADIUS_METERS = 150;   // testing: 500/1000, real: 50-150
 
 app.use(cors({ origin: true, credentials: true }));
