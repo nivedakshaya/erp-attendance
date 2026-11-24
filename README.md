@@ -177,6 +177,6 @@ The primary objective of this project is to develop a reliable and efficient att
 
 ---
 
-**Developed by:** Nived Akshaya
+**Developed by:** Nived 
 
 **Project:** ERP Attendance Management System
